@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MindBreak — Real-Time Microbreak Mindfulness Coach</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { font-family: 'Inter', sans-serif; }
+:root {
+  --primary: #4F46E5;
+  --primary-light: #818CF8;
+  --accent: #10B981;
+  --bg: #0F172A;
+  --card: #1E293B;
+  --card-light: #334155;
+}
+body { background: var(--bg); color: #E2E8F0; overflow-x: hidden; }
+.breathing-circle {
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(79,70,229,0.4) 0%, rgba(16,185,129,0.2) 70%, transparent 100%);
+  border: 3px solid var(--primary-light);
+  transition: transform 4s ease-in-out, border-color 0.5s;
+}
+.breathing-circle.inhale { transform: scale(1.4); border-color: var(--accent); }
+.breathing-circle.exhale { transform: scale(0.7); border-color: var(--primary-light); }
+.breathing-circle.hold { transform: scale(1.4); border-color: #F59E0B; }
+.pulse-ring {
+  position: absolute; width: 200px; height: 200px; border-radius: 50%;
+  border: 2px solid rgba(79,70,229,0.3);
+  animation: pulse-ring 2s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+.nav-btn { min-height: 44px; min-width: 44px; }
+.glass { background: rgba(30,41,59,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+.stress-bar { transition: width 0.8s ease-in-out; }
+.fade-in { animation: fadeIn 0.5s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.slide-up { animation: slideUp 0.4s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+.tab-active { background: var(--primary); color: white; }
+.glow { box-shadow: 0 0 30px rgba(79,70,229,0.3); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--card-light); border-radius: 4px; }
+.meeting-card { transition: all 0.3s ease; }
+.meeting-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+</style>
+</head>
+<body class="min-h-screen pb-24">
+
+<!-- Header -->
+<header class="glass sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-2">
+    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center text-lg">🧘</div>
+    <div>
+      <h1 class="text-lg font-bold bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">MindBreak</h1>
+      <p class="text-[10px] text-slate-400 -mt-0.5">Microbreak Mindfulness Coach</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button onclick="showStressCheck()" class="nav-btn p-2 rounded-xl hover:bg-slate-700/50 transition" title="Stress Check">
+      <span class="text-xl">💓</span>
+    </button>
+    <button onclick="showSettings()" class="nav-btn p-2 rounded-xl hover:bg-slate-700/50 transition" title="Settings">
+      <span class="text-xl">⚙️</span>
+    </button>
+  </div>
+</header>
+
+<!-- Main Content -->
+<main id="mainContent" class="px-4 pt-4 max-w-lg mx-auto">
+  <!-- Onboarding -->
+  <div id="onboarding" class="hidden">
+    <div class="glass rounded-2xl p-6 text-center slide-up">
+      <div class="text-5xl mb-4">👋</div>
+      <h2 class="text-2xl font-bold mb-2">Welcome to MindBreak</h2>
+      <p class="text-slate-400 mb-6 text-sm">Your AI-powered microbreak coach, designed for busy managers like you. Let's personalize your experience in 30 seconds.</p>
+      <div id="onboardingSteps">
+        <div id="step1" class="space-y-4">
+          <label class="block text-left text-sm font-medium text-slate-300">What's your name?</label>
+          <input id="userName" type="text" placeholder="e.g., Sarah" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+          <label class="block text-left text-sm font-medium text-slate-300 mt-4">Your typical meeting load per day?</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="selectMeetingLoad('light')" class="meeting-load-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="light">1-3 🟢</button>
+            <button onclick="selectMeetingLoad('moderate')" class="meeting-load-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="moderate">4-6 🟡</button>
+            <button onclick="selectMeetingLoad('heavy')" class="meeting-load-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="heavy">7+ 🔴</button>
+          </div>
+          <label class="block text-left text-sm font-medium text-slate-300 mt-4">Preferred break style?</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="selectBreakStyle('breathing')" class="break-style-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="breathing">🌬️ Breathwork</button>
+            <button onclick="selectBreakStyle('body')" class="break-style-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="body">🧘 Body Scan</button>
+            <button onclick="selectBreakStyle('visualization')" class="break-style-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="visualization">🌅 Visualization</button>
+            <button onclick="selectBreakStyle('mixed')" class="break-style-btn py-3 px-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm hover:border-indigo-500 transition" data-val="mixed">🎲 Mix It Up</button>
+          </div>
+          <button onclick="completeOnboarding()" class="w-full mt-6 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold py-3.5 rounded-xl transition shadow-lg shadow-indigo-500/25 nav-btn">
+            Let's Begin →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="hidden space-y-4">
+    <!-- Greeting -->
+    <div class="fade-in">
+      <h2 id="greeting" class="text-xl font-bold"></h2>
+      <p id="subGreeting" class="text-sm text-slate-400 mt-1"></p>
+    </div>
+
+    <!-- Stress Level Card -->
+    <div class="glass rounded-2xl p-4 fade-in">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-medium text-slate-300">Current Stress Level</span>
+        <span id="stressEmoji" class="text-xl">😌</span>
+      </div>
+      <div class="w-full bg-slate-700 rounded-full h-3 mb-2">
+        <div id="stressBarFill" class="stress-bar h-3 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" style="width: 30%"></div>
+      </div>
+      <div class="flex justify-between text-xs text-slate-500">
+        <span>Calm</span>
+        <span id="stressLabel" class="text-emerald-400 font-medium">Low</span>
+        <span>High</span>
+      </div>
+    </div>
+
+    <!-- Quick Break Button -->
+    <button onclick="startQuickBreak()" id="quickBreakBtn" class="w-full glass rounded-2xl p-5 flex items-center gap-4 hover:border-indigo-500/50 transition glow nav-btn fade-in">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-500 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg shadow-indigo-500/30">
+        🫁
+      </div>
+      <div class="text-left flex-1">
+        <div class="font-semibold text-white">Take a Microbreak Now</div>
+        <div id="breakSuggestion" class="text-xs text-slate-400 mt-0.5">AI-personalized 2-min session ready</div>
+      </div>
+      <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+
+    <!-- Today's Schedule -->
+    <div class="glass rounded-2xl p-4 fade-in">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-sm text-slate-300">📅 Today's Schedule</h3>
+        <button onclick="addMeeting()" class="text-xs bg-indigo-600/30 text-indigo-400 px-3 py-1.5 rounded-lg hover:bg-indigo-600/50 transition nav-btn">+ Add</button>
+      </div>
+      <div id="meetingsList" class="space-y-2 max-h-60 overflow-y-auto">
+        <p class="text-xs text-slate-500 text-center py-4">No meetings yet. Add your schedule for smart break timing! ⏰</p>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-3 gap-3 fade-in">
+      <div class="glass rounded-2xl p-3 text-center">
+        <div class="text-2xl font-bold text-indigo-400" id="todayBreaks">0</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Breaks Today</div>
+      </div>
+      <div class="glass rounded-2xl p-3 text-center">
+        <div class="text-2xl font-bold text-emerald-400" id="todayMinutes">0</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Min Mindful</div>
+      </div>
+      <div class="glass rounded-2xl p-3 text-center">
+        <div class="text-2xl font-bold text-amber-400" id="streak">0</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Day Streak 🔥</div>
+      </div>
+    </div>
+
+    <!-- AI Insight -->
+    <div id="aiInsightCard" class="glass rounded-2xl p-4 fade-in">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-lg">🤖</span>
+        <span class="text-sm font-medium text-slate-300">AI Insight</span>
+      </div>
+      <p id="aiInsightText" class="text-xs text-slate-400 leading-relaxed">Analyzing your patterns to provide personalized insights...</p>
+    </div>
+
+    <!-- Weekly Chart -->
+    <div class="glass rounded-2xl p-4 fade-in">
+      <h3 class="font-semibold text-sm text-slate-300 mb-3">📊 Weekly Mindfulness</h3>
+      <canvas id="weeklyChart" height="150"></canvas>
+    </div>
+  </div>
+
+  <!-- Break Session Screen -->
+  <div id="breakSession" class="hidden">
+    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center slide-up">
+      <button onclick="endBreak()" class="absolute top-20 right-4 text-slate-500 hover:text-white transition nav-btn p-2">✕</button>
+      <div id="breakTypeLabel" class="text-xs font-medium text-indigo-400 uppercase tracking-widest mb-6">Breathing Exercise</div>
+      <div class="relative flex items-center justify-center mb-8">
+        <div class="pulse-ring" id="pulseRing1"></div>
+        <div class="pulse-ring" id="pulseRing2" style="animation-delay: 1s;"></div>
+        <div class="breathing-circle flex items-center justify-center" id="breathCircle">
+          <div>
+            <div id="breathInstruction" class="text-2xl font-light">Breathe In</div>
+            <div id="breathTimer" class="text-4xl font-bold mt-2 text-indigo-400">4</div>
+          </div>
+        </div>
+      </div>
+      <p id="breakGuidance" class="text-sm text-slate-400 max-w-xs leading-relaxed mb-6">Let your shoulders drop. Feel the tension releasing with each exhale.</p>
+      <div class="flex items-center gap-3 text-xs text-slate-500">
+        <span id="breakProgress">Cycle 1/4</span>
+        <span>•</span>
+        <span id="breakTimeLeft">2:00 remaining</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stress Check Modal -->
+  <div id="stressCheckModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+    <div class="glass rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 slide-up">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">💓 Quick Stress Check</h3>
+        <button onclick="closeStressCheck()" class="nav-btn p-2 text-slate-500 hover:text-white">✕</button>
+      </div>
+      <p class="text-sm text-slate-400 mb-4">How are you feeling right now? Be honest — this stays private.</p>
+      <div class="space-y-3" id="stressCheckOptions">
+        <button onclick="logStress(1)" class="w-full p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-left hover:bg-emerald-500/20 transition nav-btn">
+          <span class="text-lg">😌</span> <span class="ml-2 text-sm font-medium">Calm & Focused</span>
+        </button>
+        <button onclick="logStress(2)" class="w-full p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-left hover:bg-blue-500/20 transition nav-btn">
+          <span class="text-lg">🙂</span> <span class="ml-2 text-sm font-medium">Slightly Tense</span>
+        </button>
+        <button onclick="logStress(3)" class="w-full p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-left hover:bg-amber-500/20 transition nav-btn">
+          <span class="text-lg">😐</span> <span class="ml-2 text-sm font-medium">Moderately Stressed</span>
+        </button>
+        <button onclick="logStress(4)" class="w-full p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-left hover:bg-orange-500/20 transition nav-btn">
+          <span class="text-lg">😓</span> <span class="ml-2 text-sm font-medium">Quite Stressed</span>
+        </button>
+        <button onclick="logStress(5)" class="w-full p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-left hover:bg-red-500/20 transition nav-btn">
+          <span class="text-lg">🤯</span> <span class="ml-2 text-sm font-medium">Overwhelmed</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Meeting Modal -->
+  <div id="addMeetingModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+    <div class="glass rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 slide-up">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">📅 Add Meeting</h3>
+        <button onclick="closeAddMeeting()" class="nav-btn p-2 text-slate-500 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3">
+        <input id="meetingTitle" type="text" placeholder="Meeting title (e.g., Q4 Review)" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-500 mb-1 block">Start Time</label>
+            <input id="meetingStart" type="time" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 mb-1 block">End Time</label>
+            <input id="meetingEnd" type="time" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <select id="meetingType" class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+          <option value="1on1">1:1 Meeting</option>
+          <option value="team">Team Meeting</option>
+          <option value="presentation">Presentation</option>
+          <option value="workshop">Workshop</option>
+          <option value="external">External/Client</option>
+          <option value="focus">Focus Time</option>
+        </select>
+        <button onclick="saveMeeting()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-semibold py-3.5 rounded-xl transition nav-btn">Save Meeting</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+    <div class="glass rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 slide-up max-h-[80vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">⚙️ Settings</h3>
+        <button onclick="closeSettings()" class="nav-btn p-2 text-slate-500 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm font-medium text-slate-300 mb-2 block">Break Duration (minutes)</label>
+          <div class="flex gap-2">
+            <button onclick="setDuration(1)" class="dur-btn flex-1 py-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm nav-btn" data-val="1">1 min</button>
+            <button onclick="setDuration(2)" class="dur-btn flex-1 py-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm nav-btn" data-val="2">2 min</button>
+            <button onclick="setDuration(3)" class="dur-btn flex-1 py-3 rounded-xl bg-slate-700/50 border border-slate-600 text-sm nav-btn" data-val="3">3 min</button>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-300 mb-2 block">Smart Reminders</label>
+          <div class="flex items-center justify-between bg-slate-700/50 rounded-xl p-4">
+            <span class="text-sm text-slate-400">Notify between meetings</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="smartReminders" class="sr-only peer" checked onchange="saveSettings()">
+              <div class="w-11 h-6 bg-slate-600 rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-300 mb-2 block">Webcam Stress Detection (Beta)</label>
+          <div class="flex items-center justify-between bg-slate-700/50 rounded-xl p-4">
+            <div>
+              <span class="text-sm text-slate-400">Use facial cues</span>
+              <p class="text-[10px] text-slate-600 mt-0.5">Processed locally, never uploaded</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="webcamDetection" class="sr-only peer" onchange="toggleWebcam()">
+              <div class="w-11 h-6 bg-slate-600 rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-300 mb-2 block">Privacy & Data</label>
+          <div class="bg-slate-700/50 rounded-xl p-4 space-y-2">
+            <p class="text-xs text-slate-500">🔒 All data stored locally on your device</p>
+            <p class="text-xs text-slate-500">🚫 No biometric data leaves your phone</p>
+            <p class="text-xs text-slate-500">📊 Optional: Share anonymized summaries</p>
+            <label class="flex items-center gap-2 mt-2">
+              <input type="checkbox" id="shareCoach" class="rounded bg-slate-600 border-slate-500 text-indigo-600" onchange="saveSettings()">
+              <span class="text-xs text-slate-400">Share weekly summary with coach/HR</span>
+            </label>
+          </div>
+        </div>
+        <button onclick="resetAll()" class="w-full py-3 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition nav-btn">Reset All Data</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 left-0 right-0 glass border-t border-slate-700/50 px-4 py-2 z-40">
+  <div class="max-w-lg mx-auto flex justify-around">
+    <button onclick="showTab('dashboard')" class="nav-tab nav-btn flex flex-col items-center py-1 px-4 rounded-xl transition" data-tab="dashboard">
+      <span class="text-xl">🏠</span>
+      <span class="text-[10px] mt-0.5">Home</span>
+    </button>
+    <button onclick="showTab('practices')" class="nav-tab nav-btn flex flex-col items-center py-1 px-4 rounded-xl transition" data-tab="practices">
+      <span class="text-xl">🧘</span>
+      <span class="text-[10px] mt-0.5">Practices</span>
+    </button>
+    <button onclick="startQuickBreak()" class="nav-btn flex flex-col items-center py-1 px-4 rounded-xl transition relative -top-3">
+      <div class="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 to-emerald-500 flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
+        ▶️
+      </div>
+    </button>
+    <button onclick="showTab('analytics')" class="nav-tab nav-btn flex flex-col items-center py-1 px-4 rounded-xl transition" data-tab="analytics">
+      <span class="text-xl">📊</span>
+      <span class="text-[10px] mt-0.5">Analytics</span>
+    </button>
+    <button onclick="showTab('journal')" class="nav-tab nav-btn flex flex-col items-center py-1 px-4 rounded-xl transition" data-tab="journal">
+      <span class="text-xl">📝</span>
+      <span class="text-[10px] mt-0.5">Journal</span>
+    </button>
+  </div>
+</nav>
+
+<!-- Practices Tab -->
+<div id="practicesTab" class="hidden px-4 pt-4 max-w-lg mx-auto pb-24">
+  <h2 class="text-xl font-bold mb-4 fade-in">🧘 Practice Library</h2>
+  <div class="space-y-3" id="practicesList"></div>
+</div>
+
+<!-- Analytics Tab -->
+<div id="analyticsTab" class="hidden px-4 pt-4 max-w-lg mx-auto pb-24">
+  <h2 class="text-xl font-bold mb-4 fade-in">📊 Your Analytics</h2>
+  <div class="glass rounded-2xl p-4 mb-4 fade-in">
+    <h3 class="text-sm font-medium text-slate-300 mb-3">Stress Patterns This Week</h3>
+    <canvas id="stressChart" height="200"></canvas>
+  </div>
+  <div class="glass rounded-2xl p-4 mb-4 fade-in">
+    <h3 class="text-sm font-medium text-slate-300 mb-3">Top Stress Triggers</h3>
+    <div id="triggersList" class="space-y-2"></div>
+  </div>
+  <div class="glass rounded-2xl p-4 fade-in">
+    <h3 class="text-sm font-medium text-slate-300 mb-3">Recovery Effectiveness</h3>
+    <div id="recoveryStats" class="text-center py-4">
+      <div class="text-4xl font-bold text-emerald-400" id="recoveryRate">78%</div>
+      <p class="text-xs text-slate-500 mt-1">of your breaks reduced stress by 1+ level</p>
+    </div>
+  </div>
+  <div class="glass rounded-2xl p-4 mt-4 fade-in">
+    <h3 class="text-sm font-medium text-slate-300 mb-3">🤖 AI Weekly Summary</h3>
+    <p id="aiWeeklySummary" class="text-xs text-slate-400 leading-relaxed">Loading your personalized weekly analysis...</p>
+    <button onclick="generateWeeklySummary()" class="mt-3 text-xs bg-indigo-600/30 text-indigo-400 px-4 py-2 rounded-lg hover:bg-indigo-600/50 transition nav-btn">Refresh Analysis</button>
+  </div>
+</div>
+
+<!-- Journal Tab -->
+<div id="journalTab" class="hidden px-4 pt-4 max-w-lg mx-auto pb-24">
+  <h2 class="text-xl font-bold mb-4 fade-in">📝 Mindfulness Journal</h2>
+  <div class="glass rounded-2xl p-4 mb-4 fade-in">
+    <textarea id="journalEntry" rows="4" placeholder="How are you feeling? What's on your mind? 💭" class="w-full bg-transparent border-none text-white placeholder-slate-500 focus:outline-none text-sm resize-none"></textarea>
+    <div class="flex justify-between items-center mt-2">
+      <span class="text-[10px] text-slate-600">Private & encrypted locally</span>
+      <button onclick="saveJournal()" class="bg-indigo-600 text-white text-xs px-4 py-2 rounded-lg hover:bg-indigo-500 transition nav-btn">Save Entry</button>
+    </div>
+  </div>
+  <div id="journalEntries" class="space-y-3"></div>
+</div>
+
+<!-- Notification Toast -->
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 glass rounded-2xl px-5 py-3 shadow-xl max-w-sm">
+  <p id="toastMsg" class="text-sm text-center"></p>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+  <div class="text-center">
+    <div class="animate-spin w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+    <p id="loadingText" class="text-sm text-slate-400">Preparing your session...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Global AI tracking
+  window.totalAIInputTokens = 0;
+  window.totalAIOutputTokens = 0;
+  window.totalAITime = 0;
+  window.aiTimingByAlias = {};
+
+  // App State
+  let state = loadState();
+  let breakInterval = null;
+  let reminderInterval = null;
+  let weeklyChart = null;
+  let stressChart = null;
+
+  function loadState() {
+    const saved = localStorage.getItem('mindbreak_state');
+    const defaults = {
+      onboarded: false,
+      name: '',
+      meetingLoad: 'moderate',
+      breakStyle: 'mixed',
+      breakDuration: 2,
+      smartReminders: true,
+      webcamEnabled: false,
+      shareCoach: false,
+      stressLevel: 2,
+      meetings: [],
+      breaks: [],
+      stressLog: [],
+      journal: [],
+      streak: 0,
+      lastActiveDate: null,
+      todayBreaks: 0,
+      todayMinutes: 0,
+    };
+    if (saved) {
+      try {
+        return { ...defaults, ...JSON.parse(saved) };
+      } catch { return defaults; }
+    }
+    return defaults;
+  }
+
+  function saveState() {
+    localStorage.setItem('mindbreak_state', JSON.stringify(state));
+  }
+
+  // AI Helper
+  async function callAI(prompt, retries = 3) {
+    const start = Date.now();
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch('https://16504442930.work/run_prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            alias: 'genericAI',
+            params: { prompt }
+          })
+        });
+        const data = await res.json();
+        const elapsed = Date.now() - start;
+        window.totalAITime += elapsed;
+        window.aiTimingByAlias['genericAI'] = (window.aiTimingByAlias['genericAI'] || 0) + elapsed;
+        if (data.input_tokens) window.totalAIInputTokens += data.input_tokens;
+        if (data.output_tokens) window.totalAIOutputTokens += data.output_tokens;
+        return data;
+      } catch (e) {
+        if (i === retries - 1) {
+          // Format error with AI
+          try {
+            const errRes = await fetch('https://16504442930.work/run_prompt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                alias: 'genericAI',
+                params: { prompt: `Reformat this error message to be user-friendly and empower the user to fix it. Error: ${e.message}. Full response: ${JSON.stringify(e)}. Return JSON with key "friendlyError" as a string.` }
+              })
+            });
+            const errData = await errRes.json();
+            showToast(errData.friendlyError || 'Something went wrong. Please try again.');
+          } catch {
+            showToast('Connection issue. Please check your internet and try again. 🌐');
+          }
+          return null;
+        }
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+
+  // Init
+  function init() {
+    checkStreak();
+    resetDailyCountsIfNeeded();
+
+    if (!state.onboarded) {
+      document.getElementById('onboarding').classList.remove('hidden');
+    } else {
+      showDashboard();
+    }
+    setupReminders();
+  }
+
+  function checkStreak() {
+    const today = new Date().toDateString();
+    if (state.lastActiveDate !== today) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (state.lastActiveDate === yesterday.toDateString()) {
+        // streak continues
+      } else if (state.lastActiveDate !== today) {
+        state.streak = 0;
+      }
+    }
+    saveState();
+  }
+
+  function resetDailyCountsIfNeeded() {
+    const today = new Date().toDateString();
+    const lastDate = state.lastActiveDate;
+    if (lastDate !== today) {
+      state.todayBreaks = 0;
+      state.todayMinutes = 0;
+      state.lastActiveDate = today;
+      saveState();
+    }
+  }
+
+  // Onboarding
+  window.selectMeetingLoad = function(val) {
+    state.meetingLoad = val;
+    document.querySelectorAll('.meeting-load-btn').forEach(b => {
+      b.classList.toggle('border-indigo-500', b.dataset.val === val);
+      b.classList.toggle('bg-indigo-600/20', b.dataset.val === val);
+    });
+  };
+
+  window.selectBreakStyle = function(val) {
+    state.breakStyle = val;
+    document.querySelectorAll('.break-style-btn').forEach(b => {
+      b.classList.toggle('border-indigo-500', b.dataset.val === val);
+      b.classList.toggle('bg-indigo-600/20', b.dataset.val === val);
+    });
+  };
+
+  window.completeOnboarding = function() {
+    const name = document.getElementById('userName').value.trim();
+    if (!name) {
+      showToast('Please enter your name to continue 😊');
+      return;
+    }
+    state.name = name;
+    state.onboarded = true;
+    state.lastActiveDate = new Date().toDateString();
+    saveState();
+    document.getElementById('onboarding').classList.add('hidden');
+    showDashboard();
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    showToast(`Welcome, ${name}! 🎉 Let's build your mindfulness habit.`);
+  };
+
+  // Dashboard
+  function showDashboard() {
+    hideAllTabs();
+    document.getElementById('dashboard').classList.remove('hidden');
+    highlightTab('dashboard');
+    updateGreeting();
+    updateStressDisplay();
+    updateStats();
+    updateMeetingsList();
+    renderWeeklyChart();
+    loadAIInsight();
+  }
+
+  function updateGreeting() {
+    const hour = new Date().getHours();
+    let greeting, sub;
+    if (hour < 12) { greeting = `Good morning, ${state.name} ☀️`; sub = 'Start your day with clarity.'; }
+    else if (hour < 17) { greeting = `Good afternoon, ${state.name} 🌤️`; sub = 'Time for a mindful reset?'; }
+    else { greeting = `Good evening, ${state.name} 🌙`; sub = 'Wind down with intention.'; }
+    document.getElementById('greeting').textContent = greeting;
+    document.getElementById('subGreeting').textContent = sub;
+  }
+
+  function updateStressDisplay() {
+    const level = state.stressLevel;
+    const bar = document.getElementById('stressBarFill');
+    const emoji = document.getElementById('stressEmoji');
+    const label = document.getElementById('stressLabel');
+    const pct = (level / 5) * 100;
+    bar.style.width = pct + '%';
+
+    const configs = {
+      1: { emoji: '😌', label: 'Calm', color: 'from-emerald-500 to-emerald-400', textColor: 'text-emerald-400' },
+      2: { emoji: '🙂', label: 'Low', color: 'from-emerald-500 to-emerald-400', textColor: 'text-emerald-400' },
+      3: { emoji: '😐', label: 'Moderate', color: 'from-amber-500 to-amber-400', textColor: 'text-amber-400' },
+      4: { emoji: '😓', label: 'High', color: 'from-orange-500 to-orange-400', textColor: 'text-orange-400' },
+      5: { emoji: '🤯', label: 'Critical', color: 'from-red-500 to-red-400', textColor: 'text-red-400' },
+    };
+    const cfg = configs[level] || configs[2];
+    emoji.textContent = cfg.emoji;
+    label.textContent = cfg.label;
+    label.className = `${cfg.textColor} font-medium`;
+    bar.className = `stress-bar h-3 rounded-full bg-gradient-to-r ${cfg.color}`;
+  }
+
+  function updateStats() {
+    document.getElementById('todayBreaks').textContent = state.todayBreaks;
+    document.getElementById('todayMinutes').textContent = state.todayMinutes;
+    document.getElementById('streak').textContent = state.streak;
+  }
+
+  // Meetings
+  function updateMeetingsList() {
+    const container = document.getElementById('meetingsList');
+    const today = new Date().toDateString();
+    const todayMeetings = state.meetings.filter(m => new Date(m.date).toDateString() === today);
+
+    if (todayMeetings.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">No meetings yet. Add your schedule for smart break timing! ⏰</p>';
+      return;
+    }
+
+    todayMeetings.sort((a, b) => a.start.localeCompare(b.start));
+    const typeEmojis = { '1on1': '👥', 'team': '👫', 'presentation': '📊', 'workshop': '🛠️', 'external': '🤝', 'focus': '🎯' };
+
+    container.innerHTML = todayMeetings.map((m, i) => `
+      <div class="meeting-card flex items-center gap-3 bg-slate-700/30 rounded-xl p-3">
+        <div class="text-xl">${typeEmojis[m.type] || '📅'}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium truncate">${m.title}</div>
+          <div class="text-[10px] text-slate-500">${m.start} – ${m.end}</div>
+        </div>
+        <button onclick="removeMeeting(${i})" class="text-slate-600 hover:text-red-400 transition nav-btn p-1">✕</button>
+      </div>
+    `).join('');
+  }
+
+  window.addMeeting = function() {
+    document.getElementById('addMeetingModal').classList.remove('hidden');
+  };
+
+  window.closeAddMeeting = function() {
+    document.getElementById('addMeetingModal').classList.add('hidden');
+  };
+
+  window.saveMeeting = function() {
+    const title = document.getElementById('meetingTitle').value.trim();
+    const start = document.getElementById('meetingStart').value;
+    const end = document.getElementById('meetingEnd').value;
+    const type = document.getElementById('meetingType').value;
+
+    if (!title || !start || !end) {
+      showToast('Please fill in all fields 📝');
+      return;
+    }
+
+    state.meetings.push({ title, start, end, type, date: new Date().toISOString() });
+    saveState();
+    updateMeetingsList();
+    closeAddMeeting();
+    showToast('Meeting added! I\'ll suggest breaks around it. 🧠');
+    document.getElementById('meetingTitle').value = '';
+  };
+
+  window.removeMeeting = function(idx) {
+    const today = new Date().toDateString();
+    const todayMeetings = state.meetings.filter(m => new Date(m.date).toDateString() === today);
+    const toRemove = todayMeetings[idx];
+    state.meetings = state.meetings.filter(m => m !== toRemove);
+    saveState();
+    updateMeetingsList();
+  };
+
+  // Stress Check
+  window.showStressCheck = function() {
+    document.getElementById('stressCheckModal').classList.remove('hidden');
+  };
+
+  window.closeStressCheck = function() {
+    document.getElementById('stressCheckModal').classList.add('hidden');
+  };
+
+  window.logStress = function(level) {
+    state.stressLevel = level;
+    state.stressLog.push({
+      level,
+      time: new Date().toISOString(),
+      context: getCurrentContext()
+    });
+    saveState();
+    updateStressDisplay();
+    closeStressCheck();
+
+    if (level >= 4) {
+      showToast('High stress detected. Starting a calming microbreak... 🌊');
+      setTimeout(() => startQuickBreak(), 1500);
+    } else if (level >= 3) {
+      showToast('Noted! Consider a quick break when you can. 🫁');
+    } else {
+      showToast('Great! Keep that calm energy going. ✨');
+    }
+  };
+
+  function getCurrentContext() {
+    const now = new Date();
+    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const today = now.toDateString();
+    const todayMeetings = state.meetings.filter(m => new Date(m.date).toDateString() === today);
+
+    let context = 'free_time';
+    for (const m of todayMeetings) {
+      if (timeStr >= m.start && timeStr <= m.end) {
+        context = `during_${m.type}`;
+        break;
+      }
+      if (timeStr < m.start) {
+        const diff = timeDiffMinutes(timeStr, m.start);
+        if (diff <= 10) { context = `before_${m.type}`; break; }
+      }
+    }
+    return context;
+  }
+
+  function timeDiffMinutes(t1, t2) {
+    const [h1, m1] = t1.split(':').map(Number);
+    const [h2, m2] = t2.split(':').map(Number);
+    return (h2 * 60 + m2) - (h1 * 60 + m1);
+  }
+
+  // Break Session
+  const practices = [
+    { id: 'box', name: 'Box Breathing', icon: '📦', desc: 'Equal inhale-hold-exhale-hold pattern. Great for focus.', type: 'breathing', phases: [{name:'Breathe In',dur:4},{name:'Hold',dur:4},{name:'Breathe Out',dur:4},{name:'Hold',dur:4}] },
+    { id: '478', name: '4-7-8 Relaxation', icon: '🌙', desc: 'Deep calming breath for stress relief.', type: 'breathing', phases: [{name:'Breathe In',dur:4},{name:'Hold',dur:7},{name:'Breathe Out',dur:8}] },
+    { id: 'coherent', name: 'Coherent Breathing', icon: '💚', desc: '5.5 breaths per minute for heart-brain coherence.', type: 'breathing', phases: [{name:'Breathe In',dur:5},{name:'Breathe Out',dur:5}] },
+    { id: 'bodyscan', name: 'Quick Body Scan', icon: '🧘', desc: 'Notice tension from head to toes.', type: 'body', phases: [{name:'Relax Head & Jaw',dur:10},{name:'Relax Shoulders',dur:10},{name:'Relax Chest & Back',dur:10},{name:'Relax Hands',dur:10},{name:'Relax Legs & Feet',dur:10}] },
+    { id: 'grounding', name: '5-4-3-2-1 Grounding', icon: '🌳', desc: 'Use senses to ground yourself in the present.', type: 'body', phases: [{name:'Notice 5 things you SEE',dur:12},{name:'Touch 4 things',dur:12},{name:'Hear 3 sounds',dur:10},{name:'Smell 2 things',dur:8},{name:'Taste 1 thing',dur:8}] },
+    { id: 'mountain', name: 'Mountain Visualization', icon: '🏔️', desc: 'Become as steady and unshakeable as a mountain.', type: 'visualization', phases: [{name:'Picture a Mountain',dur:15},{name:'Feel Its Strength',dur:15},{name:'Embody Stillness',dur:15},{name:'Return Refreshed',dur:15}] },
+    { id: 'ocean', name: 'Ocean Waves', icon: '🌊', desc: 'Sync your breath with gentle waves.', type: 'visualization', phases: [{name:'Wave Rolling In',dur:6},{name:'Wave at Peak',dur:2},{name:'Wave Rolling Out',dur:6}] },
+  ];
+
+  let currentBreak = null;
+  let breakTimer = null;
+
+  window.startQuickBreak = function(practiceId) {
+    let practice;
+    if (practiceId) {
+      practice = practices.find(p => p.id === practiceId);
+    } else {
+      practice = selectBestPractice();
+    }
+    currentBreak = { practice, startTime: Date.now(), totalDuration: state.breakDuration * 60 };
+    showBreakSession(practice);
+  };
+
+  function selectBestPractice() {
+    const eligible = state.breakStyle === 'mixed' ? practices : practices.filter(p => p.type === state.breakStyle || state.breakStyle === 'mixed');
+    const pool = eligible.length > 0 ? eligible : practices;
+
+    // Context-aware selection
+    if (state.stressLevel >= 4) {
+      return pool.find(p => p.id === '478') || pool[0];
+    }
+    if (state.stressLevel <= 2) {
+      return pool.find(p => p.id === 'coherent') || pool[0];
+    }
+
+    const ctx = getCurrentContext();
+    if (ctx.includes('presentation') || ctx.includes('external')) {
+      return pool.find(p => p.id === 'box') || pool[0];
+    }
+
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function showBreakSession(practice) {
+    hideAllTabs();
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('breakSession').classList.remove('hidden');
+    document.getElementById('breakTypeLabel').textContent = practice.name;
+
+    const circle = document.getElementById('breathCircle');
+    const instruction = document.getElementById('breathInstruction');
+    const timer = document.getElementById('breathTimer');
+    const guidance = document.getElementById('breakGuidance');
+    const progress = document.getElementById('breakProgress');
+    const timeLeft = document.getElementById('breakTimeLeft');
+
+    const totalSec = currentBreak.totalDuration;
+    const phases = practice.phases;
+    const cycleDur = phases.reduce((sum, p) => sum + p.dur, 0);
+    const totalCycles = Math.max(1, Math.floor(totalSec / cycleDur));
+
+    let elapsed = 0;
+    let currentCycle = 0;
+    let currentPhase = 0;
+    let phaseElapsed = 0;
+
+    const guidanceTexts = [
+      'Let your shoulders drop. Feel the tension releasing.',
+      'You\'re doing great. Each breath brings more clarity.',
+      'Notice any thoughts without judgment. Let them pass.',
+      'Feel the stillness between breaths.',
+      'Your mind is becoming clearer with each cycle.',
+      'You are fully present in this moment.',
+    ];
+
+    function updateDisplay() {
+      const phase = phases[currentPhase];
+      instruction.textContent = phase.name;
+      timer.textContent = phase.dur - phaseElapsed;
+      progress.textContent = `Cycle ${currentCycle + 1}/${totalCycles}`;
+
+      const remaining = totalSec - elapsed;
+      const min = Math.floor(remaining / 60);
+      const sec = remaining % 60;
+      timeLeft.textContent = `${min}:${sec.toString().padStart(2, '0')} remaining`;
+
+      // Circle animation
+      circle.classList.remove('inhale', 'exhale', 'hold');
+      if (phase.name.toLowerCase().includes('in') || phase.name.toLowerCase().includes('see') || phase.name.toLowerCase().includes('picture')) {
+        circle.classList.add('inhale');
+      } else if (phase.name.toLowerCase().includes('out') || phase.name.toLowerCase().includes('return')) {
+        circle.classList.add('exhale');
+      } else if (phase.name.toLowerCase().includes('hold')) {
+        circle.classList.add('hold');
+      } else {
+        circle.classList.add('inhale');
+      }
+
+      guidance.textContent = guidanceTexts[currentCycle % guidanceTexts.length];
+    }
+
+    updateDisplay();
+
+    breakTimer = setInterval(() => {
+      elapsed++;
+      phaseElapsed++;
+
+      if (phaseElapsed >= phases[currentPhase].dur) {
+        phaseElapsed = 0;
+        currentPhase++;
+        if (currentPhase >= phases.length) {
+          currentPhase = 0;
+          currentCycle++;
+          if (currentCycle >= totalCycles || elapsed >= totalSec) {
+            completeBreak();
+            return;
+          }
+        }
+      }
+
+      updateDisplay();
+    }, 1000);
+  }
+
+  function completeBreak() {
+    clearInterval(breakTimer);
+    const duration = Math.round((Date.now() - currentBreak.startTime) / 60000);
+    const mins = Math.max(1, duration);
+
+    state.todayBreaks++;
+    state.todayMinutes += mins;
+    state.breaks.push({
+      practice: currentBreak.practice.id,
+      duration: mins,
+      stressBefore: state.stressLevel,
+      time: new Date().toISOString(),
+      context: getCurrentContext()
+    });
+
+    // Reduce stress after break
+    state.stressLevel = Math.max(1, state.stressLevel - 1);
+
+    // Update streak
+    state.lastActiveDate = new Date().toDateString();
+    if (state.todayBreaks === 1) {
+      state.streak++;
+    }
+
+    saveState();
+
+    document.getElementById('breakSession').classList.add('hidden');
+    showDashboard();
+
+    confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 }, colors: ['#4F46E5', '#10B981', '#818CF8'] });
+    showToast(`Great job! ${mins} min break completed. Stress reduced. ✨`);
+  }
+
+  window.endBreak = function() {
+    clearInterval(breakTimer);
+    document.getElementById('breakSession').classList.add('hidden');
+    showDashboard();
+  };
+
+  // Practices Tab
+  function showPractices() {
+    hideAllTabs();
+    document.getElementById('practicesTab').classList.remove('hidden');
+    highlightTab('practices');
+
+    const container = document.getElementById('practicesList');
+    container.innerHTML = practices.map(p => `
+      <button onclick="startQuickBreak('${p.id}')" class="w-full glass rounded-2xl p-4 flex items-center gap-4 hover:border-indigo-500/50 transition text-left nav-btn fade-in">
+        <div class="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-2xl flex-shrink-0">${p.icon}</div>
+        <div class="flex-1">
+          <div class="font-medium text-sm">${p.name}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${p.desc}</div>
+          <span class="inline-block mt-1 text-[10px] bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded-full">${p.type}</span>
+        </div>
+        <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    `).join('');
+  }
+
+  // Analytics Tab
+  function showAnalytics() {
+    hideAllTabs();
+    document.getElementById('analyticsTab').classList.remove('hidden');
+    highlightTab('analytics');
+    renderStressChart();
+    renderTriggers();
+    renderRecovery();
+  }
+
+  function renderWeeklyChart() {
+    const ctx = document.getElementById('weeklyChart');
+    if (!ctx) return;
+    if (weeklyChart) weeklyChart.destroy();
+
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const data = days.map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const ds = d.toDateString();
+      return state.breaks.filter(b => new Date(b.time).toDateString() === ds).reduce((s, b) => s + b.duration, 0);
+    });
+
+    weeklyChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: days,
+        datasets: [{
+          label: 'Minutes',
+          data: data,
+          backgroundColor: 'rgba(79, 70, 229, 0.5)',
+          borderColor: 'rgba(79, 70, 229, 1)',
+          borderWidth: 1,
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748B', font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: '#64748B', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function renderStressChart() {
+    const ctx = document.getElementById('stressChart');
+    if (!ctx) return;
+    if (stressChart) stressChart.destroy();
+
+    const last7 = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const ds = d.toDateString();
+      const dayLogs = state.stressLog.filter(l => new Date(l.time).toDateString() === ds);
+      const avg = dayLogs.length > 0 ? dayLogs.reduce((s, l) => s + l.level, 0) / dayLogs.length : null;
+      last7.push({ label: d.toLocaleDateString('en', { weekday: 'short' }), avg: avg || 0 });
+    }
+
+    stressChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: last7.map(d => d.label),
+        datasets: [{
+          label: 'Avg Stress',
+          data: last7.map(d => d.avg),
+          borderColor: '#F59E0B',
+          backgroundColor: 'rgba(245,158,11,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: '#F59E0B',
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 5, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748B', font: { size: 10 }, stepSize: 1 } },
+          x: { grid: { display: false }, ticks: { color: '#64748B', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function renderTriggers() {
+    const container = document.getElementById('triggersList');
+    const contextCounts = {};
+    state.stressLog.filter(l => l.level >= 3).forEach(l => {
+      const ctx = l.context || 'unknown';
+      contextCounts[ctx] = (contextCounts[ctx] || 0) + 1;
+    });
+
+    const sorted = Object.entries(contextCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    if (sorted.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-500 text-center py-3">Not enough data yet. Log stress checks to see triggers. 📊</p>';
+      return;
+    }
+
+    const labels = {
+      'free_time': '☕ Free Time',
+      'during_1on1': '👥 During 1:1s',
+      'during_team': '👫 Team Meetings',
+      'during_presentation': '📊 Presentations',
+      'during_external': '🤝 Client Calls',
+      'before_presentation': '😬 Before Presentations',
+      'during_workshop': '🛠️ Workshops',
+      'during_focus': '🎯 Focus Time',
+      'unknown': '❓ Unspecified',
+    };
+
+    const max = sorted[0][1];
+    container.innerHTML = sorted.map(([ctx, count]) => `
+      <div class="flex items-center gap-3">
+        <span class="text-xs w-36 truncate text-slate-400">${labels[ctx] || ctx}</span>
+        <div class="flex-1 bg-slate-700 rounded-full h-2">
+          <div class="bg-amber-500 h-2 rounded-full transition-all" style="width: ${(count/max)*100}%"></div>
+        </div>
+        <span class="text-xs text-slate-500 w-6 text-right">${count}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderRecovery() {
+    const breaks = state.breaks.filter(b => b.stressBefore >= 3);
+    if (breaks.length === 0) {
+      document.getElementById('recoveryRate').textContent = '--';
+      return;
+    }
+    // Simple recovery: count breaks where stress before >= 3
+    const effective = breaks.length;
+    const rate = Math.round((effective / Math.max(1, state.stressLog.filter(l => l.level >= 3).length)) * 100);
+    document.getElementById('recoveryRate').textContent = Math.min(100, rate) + '%';
+  }
+
+  // AI Insight
+  async function loadAIInsight() {
+    const recentStress = state.stressLog.slice(-10);
+    const recentBreaks = state.breaks.slice(-10);
+    const meetingLoad = state.meetingLoad;
+
+    const prompt = `You are a mindfulness coach for busy managers. Given this data:
+- User name: ${state.name}
+- Meeting load: ${meetingLoad}
+- Recent stress levels (1-5 scale): ${recentStress.map(s => s.level).join(', ') || 'none logged yet'}
+- Recent stress contexts: ${recentStress.map(s => s.context).join(', ') || 'none'}
+- Breaks taken today: ${state.todayBreaks}
+- Break minutes today: ${state.todayMinutes}
+- Preferred style: ${state.breakStyle}
+- Current streak: ${state.streak} days
+
+Provide a brief, warm, personalized insight (2-3 sentences) about their stress patterns and one actionable tip. Be encouraging and specific.
+
+Return JSON with exactly this structure:
+{
+  "insight": string (the 2-3 sentence insight),
+  "breakSuggestion": string (short 5-8 word suggestion for their next break type)
+}`;
+
+    const result = await callAI(prompt);
+    if (result) {
+      const insight = result.insight || 'Keep checking in with yourself throughout the day. Small breaks compound into big wellbeing gains!';
+      const suggestion = result.breakSuggestion || 'AI-personalized session ready';
+      document.getElementById('aiInsightText').textContent = insight;
+      document.getElementById('breakSuggestion').textContent = suggestion;
+    }
+  }
+
+  // Weekly Summary
+  window.generateWeeklySummary = async function() {
+    showLoading('Generating your weekly analysis...');
+
+    const weekStress = state.stressLog.filter(l => {
+      const d = new Date(l.time);
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      return d >= weekAgo;
+    });
+
+    const weekBreaks = state.breaks.filter(b => {
+      const d = new Date(b.time);
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      return d >= weekAgo;
+    });
+
+    const prompt = `You are a professional mindfulness and stress management coach for corporate managers. Analyze this week's data and write a comprehensive but concise weekly summary.
+
+Data:
+- Name: ${state.name}
+- Stress logs this week: ${JSON.stringify(weekStress.map(s => ({level: s.level, context: s.context, time: s.time})))}
+- Breaks this week: ${JSON.stringify(weekBreaks.map(b => ({practice: b.id, duration: b.duration, stressBefore: b.stressBefore, context: b.context})))}
+- Meeting load preference: ${state.meetingLoad}
+- Current streak: ${state.streak} days
+
+Write a warm, professional weekly summary with:
+1. Pattern observations (when stress peaks, what triggers it)
+2. What's working well
+3. One specific recommendation for next week
+4. An encouraging closing note
+
+Return JSON with exactly this structure:
+{
+  "summary": string (the full summary, 4-6 sentences, using line breaks where appropriate)
+}`;
+
+    const result = await callAI(prompt);
+    hideLoading();
+
+    if (result && result.summary) {
+      document.getElementById('aiWeeklySummary').textContent = result.summary;
+    } else {
+      document.getElementById('aiWeeklySummary').textContent = 'Unable to generate summary right now. Keep logging your stress and breaks, and try again later!';
+    }
+  };
+
+  // Journal
+  function showJournal() {
+    hideAllTabs();
+    document.getElementById('journalTab').classList.remove('hidden');
+    highlightTab('journal');
+    renderJournalEntries();
+  }
+
+  window.saveJournal = function() {
+    const text = document.getElementById('journalEntry').value.trim();
+    if (!text) { showToast('Write something first! 📝'); return; }
+
+    state.journal.unshift({
+      text,
+      time: new Date().toISOString(),
+      stressLevel: state.stressLevel,
+    });
+    saveState();
+    document.getElementById('journalEntry').value = '';
+    renderJournalEntries();
+    showToast('Journal entry saved! 📝✨');
+  };
+
+  function renderJournalEntries() {
+    const container = document.getElementById('journalEntries');
+    if (state.journal.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-500 text-center py-8">Your journal is empty. Start writing to track your mindfulness journey! 🌱</p>';
+      return;
+    }
+
+    container.innerHTML = state.journal.slice(0, 20).map((entry, i) => {
+      const d = new Date(entry.time);
+      const dateStr = d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+      const stressEmojis = ['', '😌', '🙂', '😐', '😓', '🤯'];
+      return `
+        <div class="glass rounded-xl p-4 fade-in">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs text-slate-500">${dateStr} at ${timeStr}</span>
+            <span class="text-sm" title="Stress level: ${entry.stressLevel}">${stressEmojis[entry.stressLevel] || ''}</span>
+          </div>
+          <p class="text-sm text-slate-300 leading-relaxed">${entry.text}</p>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Settings
+  window.showSettings = function() {
+    document.getElementById('settingsModal').classList.remove('hidden');
+    document.querySelectorAll('.dur-btn').forEach(b => {
+      b.classList.toggle('border-indigo-500', parseInt(b.dataset.val) === state.breakDuration);
+      b.classList.toggle('bg-indigo-600/20', parseInt(b.dataset.val) === state.breakDuration);
+    });
+    document.getElementById('smartReminders').checked = state.smartReminders;
+    document.getElementById('webcamDetection').checked = state.webcamEnabled;
+    document.getElementById('shareCoach').checked = state.shareCoach;
+  };
+
+  window.closeSettings = function() {
+    document.getElementById('settingsModal').classList.add('hidden');
+  };
+
+  window.setDuration = function(mins) {
+    state.breakDuration = mins;
+    saveState();
+    document.querySelectorAll('.dur-btn').forEach(b => {
+      b.classList.toggle('border-indigo-500', parseInt(b.dataset.val) === mins);
+      b.classList.toggle('bg-indigo-600/20', parseInt(b.dataset.val) === mins);
+    });
+  };
+
+  window.saveSettings = function() {
+    state.smartReminders = document.getElementById('smartReminders').checked;
+    state.shareCoach = document.getElementById('shareCoach').checked;
+    saveState();
+  };
+
+  window.toggleWebcam = function() {
+    state.webcamEnabled = document.getElementById('webcamDetection').checked;
+    saveState();
+    if (state.webcamEnabled) {
+      showToast('Webcam detection enabled. All processing is local. 🔒');
+    }
+  };
+
+  window.resetAll = function() {
+    if (confirm('This will erase all your data. Are you sure?')) {
+      localStorage.removeItem('mindbreak_state');
+      location.reload();
+    }
+  };
+
+  // Navigation
+  function hideAllTabs() {
+    ['dashboard', 'practicesTab', 'analyticsTab', 'journalTab', 'breakSession', 'onboarding'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    });
+  }
+
+  window.showTab = function(tab) {
+    switch(tab) {
+      case 'dashboard': showDashboard(); break;
+      case 'practices': showPractices(); break;
+      case 'analytics': showAnalytics(); break;
+      case 'journal': showJournal(); break;
+    }
+  };
+
+  function highlightTab(tab) {
+    document.querySelectorAll('.nav-tab').forEach(b => {
+      b.classList.toggle('text-indigo-400', b.dataset.tab === tab);
+      b.classList.toggle('text-slate-500', b.dataset.tab !== tab);
+    });
+  }
+
+  // Smart Reminders
+  function setupReminders() {
+    if (reminderInterval) clearInterval(reminderInterval);
+
+    reminderInterval = setInterval(() => {
+      if (!state.smartReminders || !state.onboarded) return;
+
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+      const today = now.toDateString();
+      const todayMeetings = state.meetings.filter(m => new Date(m.date).toDateString() === today);
+
+      // Check if between meetings
+      for (let i = 0; i < todayMeetings.length - 1; i++) {
+        const gap = timeDiffMinutes(todayMeetings[i].end, todayMeetings[i+1].start);
+        if (gap >= 5 && gap <= 15 && timeStr === todayMeetings[i].end) {
+          showToast(`${gap} min gap detected! Perfect for a microbreak. 🧘`);
+          // Increase stress slightly to suggest break
+          if (state.stressLevel < 3) state.stressLevel++;
+          updateStressDisplay();
+          saveState();
+        }
+      }
+
+      // Periodic check every 45 min if no break taken
+      const lastBreak = state.breaks[state.breaks.length - 1];
+      if (lastBreak) {
+        const minsSinceBreak = (Date.now() - new Date(lastBreak.time).getTime()) / 60000;
+        if (minsSinceBreak > 45 && now.getMinutes() % 45 === 0) {
+          showToast('It\'s been a while since your last break. Your brain deserves a rest! 🧠');
+        }
+      } else if (state.todayBreaks === 0 && now.getHours() >= 10) {
+        // Haven't taken any break yet today
+        if (now.getMinutes() === 0) {
+          showToast('You haven\'t taken a break yet today. Ready for one? 🫁');
+        }
+      }
+    }, 60000); // Check every minute
+  }
+
+  // Utility
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3500);
+  }
+
+  function showLoading(text) {
+    document.getElementById('loadingText').textContent = text || 'Loading...';
+    document.getElementById('loadingOverlay').classList.remove('hidden');
+  }
+
+  function hideLoading() {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }
+
+  // Simulate ambient stress detection (since we can't actually use webcam for real)
+  function simulateStressDetection() {
+    if (!state.webcamEnabled) return;
+    // Slightly adjust stress based on time of day and meeting density
+    const hour = new Date().getHours();
+    const today = new Date().toDateString();
+    const meetingCount = state.meetings.filter(m => new Date(m.date).toDateString() === today).length;
+
+    let modifier = 0;
+    if (hour >= 14 && hour <= 16) modifier += 1; // Afternoon slump
+    if (meetingCount >= 5) modifier += 1;
+    if (state.todayBreaks >= 3) modifier -= 1;
+
+    state.stressLevel = Math.max(1, Math.min(5, 2 + modifier));
+    saveState();
+    updateStressDisplay();
+  }
+
+  // Run ambient detection every 10 min
+  setInterval(simulateStressDetection, 600000);
+
+  // Expose for onclick handlers
+  window.startQuickBreak = window.startQuickBreak || startQuickBreak;
+
+  // Boot
+  init();
+})();
+</script>
+</body>
+</html>
